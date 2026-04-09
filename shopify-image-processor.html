@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Shopify Image Processor</title>
+<style>
+:root {
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #f5f4ef;
+  --color-text-primary: #1a1a18;
+  --color-text-secondary: #6b6b67;
+  --color-border-tertiary: rgba(0,0,0,0.12);
+  --color-border-secondary: rgba(0,0,0,0.22);
+  --color-border-primary: rgba(0,0,0,0.35);
+  --color-text-success: #1a7a4a;
+  --color-text-danger: #c0392b;
+  --color-text-warning: #b86b0a;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background-primary: #1e1e1c;
+    --color-background-secondary: #2a2a28;
+    --color-text-primary: #f0efe8;
+    --color-text-secondary: #9a9a96;
+    --color-border-tertiary: rgba(255,255,255,0.10);
+    --color-border-secondary: rgba(255,255,255,0.18);
+    --color-border-primary: rgba(255,255,255,0.30);
+    --color-text-success: #4ade80;
+    --color-text-danger: #f87171;
+    --color-text-warning: #fbbf24;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 24px 20px;
+  background: var(--color-background-secondary);
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+}
+input, select, button {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  background: var(--color-background-primary);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+input:focus, select:focus { border-color: var(--color-border-primary); box-shadow: 0 0 0 3px rgba(0,0,0,0.06); }
+input[type=range] { padding: 0; background: none; border: none; box-shadow: none; cursor: pointer; }
+input[type=number] { -moz-appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button { opacity: 0.5; }
+button {
+  cursor: pointer;
+  background: transparent;
+  border: 0.5px solid var(--color-border-secondary);
+  transition: background 0.1s, color 0.1s;
+}
+button:hover { background: var(--color-background-secondary); }
+button:active { transform: scale(0.98); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.fmt-btn { background: transparent; border: 0.5px solid var(--color-border-secondary); border-radius: var(--border-radius-md); cursor: pointer; color: var(--color-text-secondary); font-size: 13px; padding: 6px 4px; transition: background 0.1s, color 0.1s; width: auto; }
+.fmt-btn.active { background: var(--color-text-primary); color: var(--color-background-primary); border-color: transparent; font-weight: 500; }
+.fmt-btn:hover:not(.active) { background: var(--color-background-secondary); color: var(--color-text-primary); }
+.slabel { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); letter-spacing: 0.06em; text-transform: uppercase; display: block; margin-bottom: 7px; }
+.psec { border-bottom: 0.5px solid var(--color-border-tertiary); padding-bottom: 14px; margin-bottom: 14px; }
+.psec:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+#drop-zone:hover { background: var(--color-background-secondary); }
+#drop-zone.drag-over { background: var(--color-background-secondary); border-color: var(--color-border-primary); }
+.file-row { background: var(--color-background-primary); border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+.rm-btn { background: none; border: none; cursor: pointer; color: var(--color-text-secondary); font-size: 17px; padding: 0 4px; line-height: 1; flex-shrink: 0; width: auto; }
+.rm-btn:hover { color: var(--color-text-danger); transform: none; }
+.toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px; }
+.toggle { width: 32px; height: 18px; background: var(--color-border-secondary); border-radius: 9px; position: relative; transition: background 0.2s; flex-shrink: 0; border: none; padding: 0; }
+.toggle.on { background: var(--color-text-primary); }
+.toggle::after { content: ''; width: 14px; height: 14px; background: var(--color-background-primary); border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: left 0.2s; }
+.toggle.on::after { left: 16px; }
+.hint { font-size: 11px; color: var(--color-text-secondary); margin: 4px 0 0; }
+code { font-size: 11px; background: var(--color-background-secondary); padding: 1px 4px; border-radius: 3px; }
+@media (max-width: 580px) { #layout { grid-template-columns: 1fr !important; } }
+</style>
+</head>
+<body>
+
+<h2 class="sr-only">Shopify Image Processor — batch compress, resize, convert to WebP, and rename images in your browser</h2>
+
+<div style="max-width:900px;margin:0 auto;">
+
+  <div style="margin-bottom:1.25rem;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+    <div>
+      <p style="font-size:20px;font-weight:500;margin:0 0 3px;color:var(--color-text-primary);">Shopify image processor</p>
+      <p style="font-size:13px;color:var(--color-text-secondary);margin:0;">Compress, resize, convert &amp; rename — 100% in your browser. Nothing is uploaded anywhere.</p>
+    </div>
+    <span id="file-badge" style="display:none;font-size:12px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:20px;padding:3px 10px;color:var(--color-text-secondary);"></span>
+  </div>
+
+  <div id="layout" style="display:grid;grid-template-columns:280px minmax(0,1fr);gap:14px;align-items:start;">
+
+    <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1rem 1.1rem;">
+
+      <div class="psec">
+        <span class="slabel">Output format</span>
+        <div style="display:flex;gap:5px;">
+          <button class="fmt-btn active" onclick="setFmt('jpeg',this)">JPEG</button>
+          <button class="fmt-btn" onclick="setFmt('webp',this)">WebP</button>
+          <button class="fmt-btn" onclick="setFmt('png',this)">PNG</button>
+        </div>
+      </div>
+
+      <div class="psec" id="quality-sec">
+        <span class="slabel" style="display:flex;justify-content:space-between;"><span>Quality</span><span id="q-val" style="color:var(--color-text-primary);">80%</span></span>
+        <input type="range" min="1" max="100" value="80" step="1" id="q-slider" oninput="document.getElementById('q-val').textContent=this.value+'%'"/>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-secondary);margin-top:3px;"><span>Smaller file</span><span>Better quality</span></div>
+      </div>
+
+      <div class="psec" id="maxsize-sec">
+        <div class="toggle-row" onclick="toggleMaxSize()">
+          <div class="toggle" id="maxsize-toggle"></div>
+          <span class="slabel" style="margin:0;">Max file size target</span>
+        </div>
+        <div id="maxsize-body" style="display:none;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <input type="number" id="maxsize-val" placeholder="e.g. 200" min="10" style="flex:1;"/>
+            <span style="font-size:13px;color:var(--color-text-secondary);flex-shrink:0;white-space:nowrap;">KB max</span>
+          </div>
+          <p class="hint">Quality is reduced automatically until the file fits. JPEG &amp; WebP only — PNG is lossless.</p>
+        </div>
+      </div>
+
+      <div class="psec">
+        <span class="slabel">Resize</span>
+        <select id="resize-preset" onchange="onPreset(this.value)" style="margin-bottom:8px;">
+          <option value="none">No resize (keep original)</option>
+          <optgroup label="Shopify presets">
+            <option value="2048x2048">Product — 2048 × 2048</option>
+            <option value="1800x1000">Collection / Blog — 1800 × 1000</option>
+            <option value="1600x500">Hero banner — 1600 × 500</option>
+            <option value="600x600">Thumbnail — 600 × 600</option>
+          </optgroup>
+          <option value="custom">Custom dimensions…</option>
+        </select>
+        <div id="custom-dims" style="display:none;gap:6px;align-items:center;margin-bottom:8px;">
+          <input type="number" id="cw" placeholder="Width px" min="1"/>
+          <span style="color:var(--color-text-secondary);font-size:13px;flex-shrink:0;">×</span>
+          <input type="number" id="ch" placeholder="Height px" min="1"/>
+        </div>
+        <div id="fit-sec" style="display:none;">
+          <span class="slabel" style="margin-top:4px;">Fit mode</span>
+          <select id="fit-mode">
+            <option value="contain">Fit within (keep ratio, no crop)</option>
+            <option value="cover">Fill &amp; crop to exact size</option>
+            <option value="stretch">Stretch to exact size</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="psec">
+        <span class="slabel">Rename files</span>
+        <select id="rename-pat" onchange="onRenamePatChange(this.value)" style="margin-bottom:7px;">
+          <option value="keep">Keep original filename</option>
+          <option value="prefix_num">prefix_001, prefix_002…</option>
+          <option value="prefix-name">prefix-originalname</option>
+          <option value="prefix-name-num">prefix-originalname-001…</option>
+          <option value="num">001, 002, 003…</option>
+          <option value="date-name">2026-04-08-originalname</option>
+          <option value="custom">Custom pattern…</option>
+        </select>
+        <div id="prefix-row" style="margin-bottom:7px;">
+          <input type="text" id="rename-prefix" placeholder="Prefix (e.g. product, summer-sale)" oninput="updateRenamePreview()"/>
+        </div>
+        <div id="custom-pat-row" style="display:none;">
+          <input type="text" id="custom-pat" placeholder="{prefix}_{name}_{num}" style="margin-bottom:4px;" oninput="updateRenamePreview()"/>
+          <p class="hint">Tokens: <code>{prefix}</code> <code>{name}</code> <code>{num}</code> <code>{date}</code></p>
+        </div>
+        <div id="rename-preview" style="font-size:11px;color:var(--color-text-secondary);margin-top:4px;"></div>
+      </div>
+
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;">
+
+      <div id="drop-zone" ondragover="onDragOver(event)" ondrop="onDrop(event)" ondragleave="onDragLeave()" onclick="document.getElementById('file-inp').click()" style="border:1.5px dashed var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:2.5rem 1rem;text-align:center;cursor:pointer;transition:background 0.15s;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--color-background-primary);">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" style="color:var(--color-text-secondary);"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <p style="font-size:14px;font-weight:500;margin:0;color:var(--color-text-primary);">Drop images here</p>
+        <p style="font-size:12px;color:var(--color-text-secondary);margin:0;">or click to browse — JPEG, PNG, WebP supported</p>
+      </div>
+      <input type="file" id="file-inp" accept="image/*" multiple style="display:none;" onchange="onFileInput(this.files)"/>
+
+      <div id="file-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+
+      <div id="stats-bar" style="display:none;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px 14px;">
+        <div style="display:flex;gap:20px;flex-wrap:wrap;">
+          <div><div style="font-size:11px;color:var(--color-text-secondary);">Files</div><div style="font-size:15px;font-weight:500;" id="s-count">0</div></div>
+          <div><div style="font-size:11px;color:var(--color-text-secondary);">Original</div><div style="font-size:15px;font-weight:500;" id="s-orig">—</div></div>
+          <div><div style="font-size:11px;color:var(--color-text-secondary);">Processed</div><div style="font-size:15px;font-weight:500;" id="s-proc">—</div></div>
+          <div><div style="font-size:11px;color:var(--color-text-secondary);">Saved</div><div style="font-size:15px;font-weight:500;color:var(--color-text-success);" id="s-saved">—</div></div>
+        </div>
+      </div>
+
+      <div id="action-bar" style="display:none;gap:8px;">
+        <button id="proc-btn" onclick="processAll()" style="flex:1;font-size:14px;padding:10px;font-weight:500;">Process all images</button>
+        <button id="dl-btn" onclick="downloadZip()" style="flex:1;font-size:14px;padding:10px;display:none;">Download ZIP</button>
+        <button onclick="clearAll()" style="font-size:13px;padding:10px 14px;color:var(--color-text-secondary);">Clear</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+let files=[], blobs={}, fmt='jpeg', maxSizeEnabled=false;
+const today=new Date().toISOString().slice(0,10);
+
+function setFmt(f,btn){
+  fmt=f;
+  document.querySelectorAll('.fmt-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('quality-sec').style.display=f==='png'?'none':'block';
+  document.getElementById('maxsize-sec').style.opacity=f==='png'?'0.5':'1';
+  if(f==='png'&&maxSizeEnabled)toggleMaxSize();
+}
+
+function toggleMaxSize(){
+  if(fmt==='png')return;
+  maxSizeEnabled=!maxSizeEnabled;
+  document.getElementById('maxsize-toggle').classList.toggle('on',maxSizeEnabled);
+  document.getElementById('maxsize-body').style.display=maxSizeEnabled?'block':'none';
+}
+
+function onPreset(v){
+  document.getElementById('custom-dims').style.display=v==='custom'?'flex':'none';
+  document.getElementById('fit-sec').style.display=v==='none'?'none':'block';
+}
+
+function onRenamePatChange(v){
+  const showPrefix=['prefix_num','prefix-name','prefix-name-num','custom'].includes(v);
+  document.getElementById('prefix-row').style.display=showPrefix?'block':'none';
+  document.getElementById('custom-pat-row').style.display=v==='custom'?'block':'none';
+  updateRenamePreview();
+}
+
+function updateRenamePreview(){
+  const preview=document.getElementById('rename-preview');
+  const exName=files.length?files[0].name:'photo.jpg';
+  try{const s=getSettings();preview.textContent='e.g. → '+makeName(exName,0,s);}
+  catch(e){preview.textContent='';}
+}
+
+function onDragOver(e){e.preventDefault();document.getElementById('drop-zone').classList.add('drag-over');}
+function onDragLeave(){document.getElementById('drop-zone').classList.remove('drag-over');}
+function onDrop(e){e.preventDefault();onDragLeave();addFiles(Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/')));}
+function onFileInput(fl){addFiles(Array.from(fl));}
+
+function addFiles(nf){
+  nf.forEach(f=>{if(!files.find(x=>x.name===f.name&&x.size===f.size))files.push(f);});
+  render();sync();updateRenamePreview();
+}
+
+function render(){
+  const list=document.getElementById('file-list');
+  list.innerHTML='';
+  files.forEach((f,i)=>{
+    const row=document.createElement('div');row.className='file-row';row.id='row-'+i;
+    const img=document.createElement('img');
+    img.style.cssText='width:40px;height:40px;object-fit:cover;border-radius:4px;flex-shrink:0;';
+    img.src=URL.createObjectURL(f);
+    const info=document.createElement('div');info.style.cssText='flex:1;min-width:0;';
+    info.innerHTML=`<div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--color-text-primary);">${f.name}</div><div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px;">${fmtB(f.size)}</div>`;
+    const st=document.createElement('div');st.id='st-'+i;
+    st.style.cssText='font-size:12px;color:var(--color-text-secondary);flex-shrink:0;text-align:right;min-width:90px;';
+    st.textContent='Pending';
+    const rm=document.createElement('button');rm.className='rm-btn';rm.innerHTML='&times;';
+    rm.onclick=(e)=>{e.stopPropagation();files.splice(i,1);render();sync();};
+    row.append(img,info,st,rm);list.appendChild(row);
+  });
+  const badge=document.getElementById('file-badge');
+  if(files.length){badge.textContent=files.length+' file'+(files.length>1?'s':'');badge.style.display='inline';}
+  else badge.style.display='none';
+}
+
+function sync(){
+  document.getElementById('action-bar').style.display=files.length?'flex':'none';
+  const sb=document.getElementById('stats-bar');
+  if(files.length){
+    sb.style.display='block';
+    document.getElementById('s-count').textContent=files.length;
+    document.getElementById('s-orig').textContent=fmtB(files.reduce((s,f)=>s+f.size,0));
+    document.getElementById('s-proc').textContent='—';
+    document.getElementById('s-saved').textContent='—';
+  }else sb.style.display='none';
+}
+
+function getSettings(){
+  const preset=document.getElementById('resize-preset').value;
+  const quality=parseInt(document.getElementById('q-slider').value)/100;
+  const fitMode=document.getElementById('fit-mode').value;
+  const prefix=document.getElementById('rename-prefix').value.trim();
+  const pat=document.getElementById('rename-pat').value;
+  const customPat=document.getElementById('custom-pat').value.trim();
+  const maxKB=maxSizeEnabled?parseInt(document.getElementById('maxsize-val').value)||null:null;
+  let tw=null,th=null;
+  if(preset!=='none'){
+    if(preset==='custom'){tw=parseInt(document.getElementById('cw').value)||null;th=parseInt(document.getElementById('ch').value)||null;}
+    else{const[a,b]=preset.split('x').map(Number);tw=a;th=b;}
+  }
+  return{fmt,quality,tw,th,fitMode,prefix,pat,customPat,maxKB};
+}
+
+function makeName(orig,i,s){
+  const ext=s.fmt==='jpeg'?'jpg':s.fmt;
+  const base=orig.replace(/\.[^.]+$/,'');
+  const num=String(i+1).padStart(3,'0');
+  const pfx=s.prefix||'image';
+  if(s.pat==='keep')return base+'.'+ext;
+  if(s.pat==='prefix_num')return pfx+'_'+num+'.'+ext;
+  if(s.pat==='prefix-name')return pfx+'-'+base+'.'+ext;
+  if(s.pat==='prefix-name-num')return pfx+'-'+base+'-'+num+'.'+ext;
+  if(s.pat==='num')return num+'.'+ext;
+  if(s.pat==='date-name')return today+'-'+base+'.'+ext;
+  if(s.pat==='custom'){
+    const p=s.customPat||'{name}';
+    return p.replace('{prefix}',pfx).replace('{name}',base).replace('{num}',num).replace('{date}',today)+'.'+ext;
+  }
+  return base+'.'+ext;
+}
+
+function getDims(iw,ih,s){
+  if(!s.tw||!s.th)return{w:iw,h:ih};
+  if(s.fitMode==='stretch'||s.fitMode==='cover')return{w:s.tw,h:s.th};
+  const r=Math.min(s.tw/iw,s.th/ih);
+  return{w:Math.round(iw*r),h:Math.round(ih*r)};
+}
+
+function renderToBlob(img,s,quality){
+  return new Promise((res,rej)=>{
+    const{w,h}=getDims(img.naturalWidth,img.naturalHeight,s);
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    const ctx=c.getContext('2d');
+    ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+    if(s.fitMode==='cover'&&s.tw&&s.th){
+      const sc=Math.max(s.tw/img.naturalWidth,s.th/img.naturalHeight);
+      ctx.drawImage(img,-(img.naturalWidth*sc-s.tw)/2,-(img.naturalHeight*sc-s.th)/2,img.naturalWidth*sc,img.naturalHeight*sc);
+    }else ctx.drawImage(img,0,0,w,h);
+    const mime=s.fmt==='webp'?'image/webp':s.fmt==='png'?'image/png':'image/jpeg';
+    c.toBlob(b=>b?res(b):rej(new Error('Failed')),mime,s.fmt==='png'?undefined:quality);
+  });
+}
+
+function loadImg(file){
+  return new Promise((res,rej)=>{
+    const img=new Image(),url=URL.createObjectURL(file);
+    img.onload=()=>{URL.revokeObjectURL(url);res(img);};
+    img.onerror=()=>rej(new Error('Load failed'));
+    img.src=url;
+  });
+}
+
+async function procFile(file,s){
+  const img=await loadImg(file);
+  let blob=await renderToBlob(img,s,s.quality);
+  if(s.maxKB&&s.fmt!=='png'&&blob.size>s.maxKB*1024){
+    let lo=0.05,hi=s.quality,best=blob;
+    for(let step=0;step<8;step++){
+      const mid=(lo+hi)/2;
+      const candidate=await renderToBlob(img,s,mid);
+      if(candidate.size<=s.maxKB*1024){best=candidate;lo=mid;}
+      else hi=mid;
+      if(hi-lo<0.02)break;
+    }
+    blob=best;
+  }
+  return blob;
+}
+
+async function processAll(){
+  const s=getSettings();
+  const btn=document.getElementById('proc-btn');
+  btn.textContent='Processing…';btn.disabled=true;
+  blobs={};let totalProc=0;
+  for(let i=0;i<files.length;i++){
+    const st=document.getElementById('st-'+i);
+    if(st){st.textContent='…';st.style.color='var(--color-text-secondary)';}
+    try{
+      const blob=await procFile(files[i],s);
+      const name=makeName(files[i].name,i,s);
+      blobs[i]={blob,name};
+      totalProc+=blob.size;
+      const hitTarget=s.maxKB&&blob.size>s.maxKB*1024;
+      if(st){
+        const warn=hitTarget?` <span style="color:var(--color-text-warning);" title="Could not reach target size">⚠</span>`:'';
+        st.innerHTML=`<span style="color:var(--color-text-success);font-weight:500;">✓ ${fmtB(blob.size)}${warn}</span><br><span style="font-size:11px;color:var(--color-text-secondary);">${name}</span>`;
+      }
+    }catch(e){
+      if(st){st.textContent='Error';st.style.color='var(--color-text-danger)';}
+    }
+  }
+  btn.textContent='Process all images';btn.disabled=false;
+  document.getElementById('dl-btn').style.display='block';
+  const totalOrig=files.reduce((s,f)=>s+f.size,0);
+  document.getElementById('s-proc').textContent=fmtB(totalProc);
+  const saved=totalOrig-totalProc;
+  document.getElementById('s-saved').textContent=fmtB(Math.max(0,saved))+' ('+Math.round(Math.max(0,saved)/totalOrig*100)+'%)';
+}
+
+async function downloadZip(){
+  if(!Object.keys(blobs).length)return;
+  const btn=document.getElementById('dl-btn');
+  btn.textContent='Building ZIP…';btn.disabled=true;
+  const zip=new JSZip();
+  for(const{blob,name}of Object.values(blobs))zip.file(name,blob);
+  const zb=await zip.generateAsync({type:'blob'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(zb);a.download='shopify-images.zip';a.click();
+  btn.textContent='Download ZIP';btn.disabled=false;
+}
+
+function clearAll(){
+  files=[];blobs={};
+  document.getElementById('file-list').innerHTML='';
+  document.getElementById('action-bar').style.display='none';
+  document.getElementById('stats-bar').style.display='none';
+  document.getElementById('file-badge').style.display='none';
+  document.getElementById('dl-btn').style.display='none';
+}
+
+function fmtB(b){
+  if(b<1024)return b+' B';
+  if(b<1048576)return Math.round(b/1024)+' KB';
+  return(b/1048576).toFixed(1)+' MB';
+}
+
+onRenamePatChange('keep');
+</script>
+</body>
+</html>
